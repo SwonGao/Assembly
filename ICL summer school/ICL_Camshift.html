@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<!-- saved from url=(0034)https://54.69.230.71/summergroup3/ -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>HTML5 BLE Robotic Arm</title>
+<!--*************************************************************
+*
+* Web BLE Robot
+*
+* My simple program for connecting to the Robotic ARM via BLE (using the Intel Curie)
+* and the SainSmart DIY 6-Axis Control Palletizing Robot Arm
+* (https://www.amazon.co.uk/SainSmart-Control-Palletizing-Arduino-MEGA2560/dp/B01GLM8X7M/ref=sr_1_9?ie=UTF8&qid=1512515546&sr=8-9&keywords=robotic+arm)
+*
+* by Benny Lo
+* Dec 5 2017
+********************************************************************-->
+<meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <script async src="opencv.js" type="text/javascript"></script>
+     <script src="//code.jquery.com/jquery-1.11.3.min.js"></script>
+
+
+<noscript>
+Please enable Java script on your browser. </br>
+<a href="http://www.google.com/support/bin/answer.py?answer=23852">Click here for details on how to enable Java script on your browser</a>
+</noscript>
+ <script type="text/javascript">
+  var servoA_characteristic=null;
+  var servoB_characteristic=null;
+  var servoC_characteristic=null;
+  var servoD_characteristic=null;
+  var servoE_characteristic=null;
+  var servoF_characteristic=null;
+  var servoG_characteristic=null;
+  var reset_characteristic=null;
+  var servoA_default=60;
+  var servoB_default=100;
+  var servoC_default=100;
+  var servoD_default=100;
+  var servoE_default=100;
+  var servoF_default=100;
+  var servoG_default=0;
+
+  function init()
+  {
+    if (isWebBluetoothEnabled())
+    {
+        console.log("BLE is enabled!");
+        var pAsliderelement=document.getElementById('servoAslider');
+        pAsliderelement.value=servoA_default;
+        var pBsliderelement=document.getElementById('servoBslider');
+        pBsliderelement.value=servoB_default;
+        var pCsliderelement=document.getElementById('servoCslider');
+        pCsliderelement.value=servoC_default;
+        var pDsliderelement=document.getElementById('servoDslider');
+        pDsliderelement.value=servoD_default;
+        var pEsliderelement=document.getElementById('servoEslider');
+        pEsliderelement.value=servoE_default;
+        var pFsliderelement=document.getElementById('servoFslider');
+        pFsliderelement.value=servoF_default;
+        var pGsliderelement=document.getElementById('servoGslider');
+        pGsliderelement.value=servoG_default;
+    }
+    else {
+        console.log("BLE is not enabled in this web browser!")
+
+    }
+  }
+
+  function isWebBluetoothEnabled() {
+    if (navigator.bluetooth) {
+      return true;
+    } else {
+      alert('Web Bluetooth API is not available.\n' +
+          'Please make sure the "Experimental Web Platform features" flag is enabled. (in chrome://flags)');
+      return false;
+    }
+  }
+function getUsbVendorName(value) {
+  // Check out page source to see what valueToUsbVendorName object is.
+  return value +
+      (value in valueToUsbVendorName ? ' (' + valueToUsbVendorName[value] + ')' : '');
+}
+
+function onDiscoverService() {//start searching for BLE devices
+  var discoverservice=document.getElementById("discover");//hide the button
+  discoverservice.hidden=true;
+
+  // Validate services UUID entered by user first.
+let optionalServices=['47452000-0f63-5b27-9122-728099603712'];//Robotic Arm (note UUID lower case)
+  console.log('Requesting any Bluetooth Device...');
+  navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: optionalServices//BSN IoT
+  })
+  .then(device => {
+    console.log('Connecting to GATT Server...');
+    return device.gatt.connect();
+  })
+  .then(server => {
+    // Note that we could also get all services that match a specific UUID by
+    // passing it to getPrimaryServices().
+    console.log('Getting Services...');
+    return server.getPrimaryServices();
+  })
+  .then(services => {
+    console.log('Getting Characteristics...');
+    let queue = Promise.resolve();
+    services.forEach(service => {
+      queue = queue.then(_ => service.getCharacteristics().then(characteristics => {
+        //if (service.uuid==['47442014-0f63-5b27-9122-728099603712'])//looking for e-AR sensor
+        if (service.uuid==['47452000-0f63-5b27-9122-728099603712'])//looking for robotic arm
+        {
+            console.log("> Service: Robotic Arm");//got it
+            //var canvastable=document.getElementById("canvastable");
+            //canvastable.hidden=false;
+            //draw();
+        }
+        else if (service.uuid==['0000180a-0000-1000-8000-00805f9b34fb'])//this is device information
+        {
+            console.log("> Service: Device Info");
+        }
+        else console.log('> Service: ' + service.uuid);//other services
+        //scan for all characteristics of the service
+          characteristics.forEach(characteristic => {
+            if (characteristic.uuid==['47452001-0f63-5b27-9122-728099603712'])
+            {// console.log(">> Characteristic: Servo A");
+                //console.log("servo A");
+                servoA_characteristic=characteristic;
+                var servoA_control=document.getElementById("servoA");
+                servoA_control.hidden=false;
+            }
+            else if (characteristic.uuid==['47452002-0f63-5b27-9122-728099603712'])
+            {
+                //console.log("servo B");
+                servoB_characteristic=characteristic;
+                var servoB_control=document.getElementById("servoB");
+                servoB_control.hidden=false;
+            }
+            else if (characteristic.uuid==['47452003-0f63-5b27-9122-728099603712'])
+            {
+                //console.log("servo C");
+                servoC_characteristic=characteristic;
+                var servoC_control=document.getElementById("servoC");
+                servoC_control.hidden=false;
+            }
+            else if (characteristic.uuid==['47452004-0f63-5b27-9122-728099603712'])
+            {
+                //console.log("servo D");
+                servoD_characteristic=characteristic;
+                var servoD_control=document.getElementById("servoD");
+                servoD_control.hidden=false;
+            }
+            else if (characteristic.uuid==['47452005-0f63-5b27-9122-728099603712'])
+            {
+                //console.log("servo E");
+                servoE_characteristic=characteristic;
+                var servoE_control=document.getElementById("servoE");
+                servoE_control.hidden=false;
+            }
+            else if (characteristic.uuid==['47452006-0f63-5b27-9122-728099603712'])
+            {
+                //console.log("servo F");
+                servoF_characteristic=characteristic;
+                var servoF_control=document.getElementById("servoF");
+                servoF_control.hidden=false;
+            }
+            else if (characteristic.uuid==['47452008-0f63-5b27-9122-728099603712'])
+            {
+                //console.log("servo G");
+                servoG_characteristic=characteristic;
+                var servoG_control=document.getElementById("servoG");
+                servoG_control.hidden=false;
+            }
+            else if (characteristic.uuid==['47452007-0f63-5b27-9122-728099603712'])
+            {
+                //console.log("Reset");
+                reset_characteristic=characteristic;
+                var reset_control=document.getElementById("reset");
+                reset_control.hidden=false;
+            }
+            else
+          console.log('>> Characteristic: ' + characteristic.uuid + ' ' +
+              getSupportedProperties(characteristic));//other characteristics
+        });
+      }));
+    });
+    return queue;
+  })
+  .catch(error => {
+    console.log('Argh! ' + error);
+  });
+}
+var servoA_state=0;
+function onButtonClick() {
+  var newvalue = Uint8Array.of(0);
+  if (servoA_state==0)
+    newvalue = Uint8Array.of(1);
+  servoA_state=!servoA_state;
+  if (servoA_characteristic !=null)
+  servoA_characteristic.writeValue(newvalue);
+}
+function onSliderA(value)
+{
+  if (servoA_characteristic ==null) return;
+  console.log("servoA:"+value);
+  newvalue = Uint8Array.of(value);
+  servoA_characteristic.writeValue(newvalue);
+}
+
+function onSliderB(value)
+{
+  if (servoB_characteristic ==null) return;
+  console.log("servoB:"+value);
+  newvalue = Uint8Array.of(value);
+  servoB_characteristic.writeValue(newvalue);
+}
+
+function onSliderC(value)
+{
+  if (servoC_characteristic ==null) return;
+  console.log("servoC:"+value);
+  newvalue = Uint8Array.of(value);
+  servoC_characteristic.writeValue(newvalue);
+}
+function onSliderD(value)
+{
+  if (servoD_characteristic ==null) return;
+  console.log("servoD:"+value);
+  newvalue = Uint8Array.of(value);
+  servoD_characteristic.writeValue(newvalue);
+}
+function onSliderE(value)
+{
+  if (servoE_characteristic ==null) return;
+  console.log("servoE:"+value);
+  newvalue = Uint8Array.of(value);
+  servoE_characteristic.writeValue(newvalue);
+}
+function onSliderF(value)
+{
+  if (servoF_characteristic ==null) return;
+  console.log("servoF:"+value);
+  newvalue = Uint8Array.of(value);
+  servoF_characteristic.writeValue(newvalue);
+}
+function onSliderG(value)
+{
+  if (servoG_characteristic ==null) return;
+  console.log("servoG:"+value);
+  newvalue = Uint8Array.of(value);
+  servoG_characteristic.writeValue(newvalue);
+}
+function onReset()
+{
+  if (reset_characteristic ==null) return;
+  console.log("reset");
+  newvalue = Uint8Array.of(0);
+  reset_characteristic.writeValue(newvalue);
+}
+
+function Start()
+{
+  if (servoA_characteristic ==null) return;
+  //console.log("servoA:"+value);//             ???????????????????????????
+  newvalue = Uint8Array.of(90);     //     ????????????????????????????
+  servoA_characteristic.writeValue(newvalue);
+   //console.log("servoA:"+value);//             ???????????????????????????
+  newvalue = Uint8Array.of(90);     //     ????????????????????????????
+  servoB_characteristic.writeValue(newvalue);
+  //console.log("servoA:"+value);//             ???????????????????????????
+  newvalue = Uint8Array.of(90);     //     ????????????????????????????
+  servoC_characteristic.writeValue(newvalue);
+  //console.log("servoA:"+value);//             ???????????????????????????
+  newvalue = Uint8Array.of(90);     //     ????????????????????????????
+  servoD_characteristic.writeValue(newvalue);
+  //console.log("servoA:"+value);//             ???????????????????????????
+  newvalue = Uint8Array.of(90);     //     ????????????????????????????
+  servoE_characteristic.writeValue(newvalue);
+  //console.log("servoA:"+value);//             ???????????????????????????
+  newvalue = Uint8Array.of(90);     //     ????????????????????????????
+  servoF_characteristic.writeValue(newvalue);
+  //console.log("servoA:"+value);//             ???????????????????????????
+  newvalue = Uint8Array.of(90);     //     ????????????????????????????
+  servoG_characteristic.writeValue(newvalue);
+}
+/* Utils */
+
+function getSupportedProperties(characteristic) {//find the details of a characteristic
+  let supportedProperties = [];
+  for (const p in characteristic.properties) {
+    if (characteristic.properties[p] === true) {
+      supportedProperties.push(p.toUpperCase());
+    }
+  }
+  return '[' + supportedProperties.join(', ') + ']';
+}
+</script>
+</head>
+<body onload="init();" style="font-family: Arial">
+  <h1>Robotics &amp; Artificial Intelligence Summer School 2018</h1>
+ <h2>BLE - Robotic Arm Control</h2>
+ <h3>Artificial Idiot</h3>
+ <p>This is a simple demo program of using BLE to control a robotic arm (Note: the SainSmart DIY 6-Axis Arm is integrated with an Intel Curie)<br>Note: It only works with Google Chrome browsers and the experimental-web-platform-features enabled (<a href="chrome://flags/#enable-experimental-web-platform-features">chrome://flags/#enable-experimental-web-platform-features</a>, enable the highlighted flag, then restart Chrome)</p>
+
+<!--<input type="button" id="deviceinfo" value="Get Device Information" onclick="onButtonClick();"/>-->
+
+<input type="button" id="discover" value="Discover BLE devices" onclick="onDiscoverService();" style="height:50px;font-size:14px"><br>
+<br><table>
+<tbody><tr id="servoA" hidden=""><td>Servo A (elbow):</td><td><input type="range" id="servoAslider" value="Servo A" min="0" max="140" step="1" onchange="onSliderA(this.value)"></td></tr>
+<tr id="servoB" hidden=""><td>Servo B (shoulder):</td><td><input type="range" id="servoBslider" value="Servo B" min="0" max="165" step="1" onchange="onSliderB(this.value)"></td></tr>
+<tr id="servoC" hidden=""><td>Servo C (wrist X):</td><td><input type="range" id="servoCslider" value="Servo C" min="0" max="180" step="1" onchange="onSliderC(this.value)"></td></tr>
+<tr id="servoD" hidden=""><td>Servo D (wrist Y):</td><td><input type="range" id="servoDslider" value="Servo D" min="0" max="90" step="1" onchange="onSliderD(this.value)"></td></tr>
+<tr id="servoE" hidden=""><td>Servo E (wrist Z):</td><td><input type="range" id="servoEslider" value="Servo E" min="0" max="180" step="1" onchange="onSliderE(this.value)"></td></tr>
+<tr id="servoF" hidden=""><td>Servo F (Base):</td><td><input type="range" id="servoFslider" value="Servo F" min="0" max="180" step="1" onchange="onSliderF(this.value)"></td></tr>
+<tr id="servoG" hidden=""><td>Servo G (Craw):</td><td><input type="range" id="servoGslider" value="Servo G" min="0" max="58" step="1" onchange="onSliderG(this.value)"></td></tr>
+<tr id="reset" hidden=""><td>Reset:</td><td><input type="button" id="resetbutton" value="Reset" min="0" onclick="onReset()"></td></tr>
+
+<tr id="testforangle"><td>TEST For Angle:</td><td>THETA1<input type="number" id="THETA1" value="233"></td><td> THETA2<input type="number" id="THETA2" value="233"></td><td>THETA3<input type="number" id="THETA3" value="233"></td><td><input type="button" id="testbuttonforangle" value="TestForAngle" min="0" onclick="TestForAngle()"></td></tr>
+
+<tr id="test"><td>TEST:</td><td>X(-120,120)<input type="number" id="X" value="0"></td><td> Y(200,320)<input type="number" id="Y" value="280"></td><td>Z (-20,200)<input type="number" id="Z" value="80"></td><td><input type="button" value="TestForMove" onclick="TestForMove()"></td></tr>
+<p>效果实测：</p>
+<p><p>mousemove: <span id="testMouseMoveSpan"></span></p></p>
+
+<button type="button" onclick="startCamera()" id="startAndStop">Start: </button>
+<button type="button" onclick="auto_movement()" id="auto_movement">auto_movement: </button>
+<button type="button" onclick="track_back()" id="track_back">track_back: </button>
+<!-- <button type="button" onclick="track_face()" id="track_face">track_face: </button> -->
+
+<p id="status">OpenCV.js is loading...</p>
+<video  width="320" height="240" id="videoInput"></video>
+<canvas width="320" height="240" id="CanvasOutput" onclick="click_point()"></canvas>
+<canvas width="320" height="240" id="CanvasOutput2"></canvas>
+<canvas width="320" height="240" id="CanvasOutput3"></canvas>
+</tbody></table>
+<hr>
+<strong>
+<p id="warning1" style="color:rgb(255,0,0);"></p>
+<p id="warning2" style="color:rgb(255,0,0);"></p>
+</strong>
+
+<script src="https://webrtc.github.io/adapter/adapter-5.0.4.js" type="text/javascript"></script>
+<script async src="opencv.js"  onload="onOpenCvReady();" type="text/javascript"></script>
+<script type="text/javascript">
+"use strict";
+
+let video = document.getElementById("videoInput"); // video is the id of video tag
+navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+    .then(function(stream) {
+        video.srcObject = stream;
+        video.play();
+    })
+    .catch(function(err) {
+        console.log("An error occured! " + err);
+    });
+
+    const videoheight = 240;
+    const videowidth = 320;
+
+    var contours = null;
+    var hierarchy = null;
+
+    var cap;
+    var src;
+    var dst;
+    var binary;
+
+    //var x_list = new Array();
+    //var y_list = new Array();
+    //var frame_count = 0;
+
+
+    const FPS = 25;
+    var cx = 0;
+    var cy = 0;
+/*
+function sleep(milliseconds) {
+  var start = new Date().getTime();
+  for (var i = 0; i < 1e7; i++) {
+    if ((new Date().getTime() - start) > milliseconds){
+      break;
+    }
+  }
+}
+*/
+
+function processVideo() {
+        let begin = Date.now();
+
+        // start processing.
+        let cap = new cv.VideoCapture(video);
+        let src = new cv.Mat(videoheight, videowidth, cv.CV_8UC4);
+        let dst = new cv.Mat(videoheight, videowidth, cv.CV_8UC1);
+        let binary = new cv.Mat(videoheight, videowidth, cv.CV_8UC1);
+
+
+        cap.read(src);
+        cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
+        cv.threshold(dst, binary, 70, 255, cv.THRESH_BINARY);
+
+        cv.imshow('CanvasOutput', binary);
+
+        var M = cv.moments(binary);
+
+        var cx = parseInt(M['m10']/M['m00']);
+        var cy = parseInt(M['m01']/M['m00']);
+
+        cap = null;
+        src = null;
+        dst = null;
+        binary = null;
+
+        let delay = 1000/FPS - (Date.now() - begin);
+
+        setTimeout(processVideo, delay)
+        /*
+
+        x_list[frame_count] = cx;
+        y_list[frame_count] = cy;
+        frame_count += 1
+
+        */
+
+        return {'x':cx,'y':cy};
+}
+
+
+function startCamera(){
+
+    processVideo()
+    setTimeout(processVideo, 0)
+
+}
+
+
+
+function onOpenCvReady() {
+  document.getElementById('status').innerHTML = 'OpenCV.js is ready.';
+}
+
+
+
+function TestForAngle(){
+  var theta1 = document.getElementById("THETA1").value;
+  var theta2 = document.getElementById("THETA2").value;
+  var theta3 = document.getElementById("THETA3").value;
+  onSliderF(theta1)//base
+  onSliderB(theta2)//shoulder
+  onSliderA(theta3)//elbow
+}
+
+function MoveTo(x,y,z){
+  document.getElementById("warning2").innerHTML="";
+  if(x<-120||x>120||y<200||y>320||z<-20||z>200)//y should be 280!
+  {
+    document.getElementById("warning1").innerHTML="WARNING: OUT OF RANGE!!!";
+    return;
+  }
+  document.getElementById("warning1").innerHTML="";
+  const l1 = 120, l2 = 270, z1=90, r1=50;//??
+  var r,temp,phi,theta1,theta2,theta3;
+
+  r = Math.sqrt(x*x+y*y)
+  theta1 = 180/Math.PI*Math.acos(x/r);
+  r = r-r1;
+  z = z-z1;
+  temp = (l1*l1+l2*l2-r*r-z*z)/2/l1/l2;
+  phi = Math.acos(temp);
+  temp = (l1-l2*Math.cos(phi))/Math.sqrt(l1*l1+l2*l2-2*l1*l2*Math.cos(phi));
+  theta2 = 180/Math.PI*(Math.asin(z/Math.sqrt(r*r+z*z))+Math.acos(temp));
+  theta3 = 180-theta2-180/Math.PI*phi;
+  console.log("###### Test ######\n("+x+","+y+","+z+")");
+  console.log("theta1 = "+theta1);
+  console.log("theta2 = "+theta2);
+  console.log("theta3 = "+theta3);
+
+  theta1 = (theta1-13.2)/1.28;//??
+  theta2 = theta2-5;//??
+  theta3 = theta3+37;//??
+
+  console.log("new theta1 = "+theta1);
+  console.log("new theta2 = "+theta2);
+  console.log("new theta3 = "+theta3);
+
+  if(theta1<30||theta1>90||theta2<10||theta2>170||theta3<30||theta3>100)//
+  {
+    document.getElementById("warning2").innerHTML="WARNING: IT'S BROKEN!!! IT NEEDS REPROGRAMMING!!!";
+    return;
+  }
+
+  onSliderF(theta1);//base
+  onSliderB(theta2);//shoulder
+  onSliderA(theta3);//elbow
+
+  console.log("###### Test ######");
+}
+
+function TestForMove(){
+  var x = document.getElementById("X").value;
+  var y = document.getElementById("Y").value;
+  var z = document.getElementById("Z").value;
+  MoveTo(x,y,z);
+}
+
+
+
+function set_coordinates(){
+    let ratio = 1.15;
+    var x, z;
+
+    //x = parseInt(processVideo()['x']) - 125;
+    //z = parseInt(processVideo()['y']) - 25;
+
+    /*
+    x = parseInt(processVideo3()['fx']) - 125;
+    z = parseInt(processVideo3()['fy']) - 25;
+    w = parseInt(processVideo3()['w']);
+    h = parseInt(processVideo3()['h']);
+    */
+    //let relative_x = 7
+    //let relative_y = 7
+
+    x = parseInt(processVideo2()['cx']) - 125;
+    z = parseInt(processVideo2()['cy']) - 25;
+
+    /*
+    x = parseInt(x_list[frame_count])
+    z = parseInt(y_list[frame_count])
+
+    let relative_x ;
+    let relative_y ;
+
+    if(frame_count >= 1){
+        relative_x = x - parseInt(x_list[frame_count - 1])
+        relative_y = z - parseInt(y_list[frame_count - 1])
+    }else{
+        relative_x = 0
+        relative_y = 0
+    }
+
+    */
+
+    // MoveTo(x + relative_x * ratio, 280, z + relative_y * ratio);
+    // MoveTo(x * ratio, 280, z * ratio * 1.05);
+    // MoveTo(x + w/2, 280, z + h/2);
+    MoveTo(x * ratio, 280, z * ratio);
+
+
+    setTimeout(set_coordinates,400)
+
+}
+
+function auto_movement(){
+
+    set_coordinates()
+    setTimeout(set_coordinates,200)
+
+}
+
+
+function processVideo2() {
+
+        let cap = new cv.VideoCapture(video);
+
+        // take first frame of the video
+        let frame = new cv.Mat(video.height, video.width, cv.CV_8UC4);
+        cap.read(frame);
+
+        // hardcode the initial location of window
+        let trackWindow = new cv.Rect(150, 60, 63, 125);
+
+        // set up the ROI for tracking
+        let roi = frame.roi(trackWindow);
+        let hsvRoi = new cv.Mat();
+        cv.cvtColor(roi, hsvRoi, cv.COLOR_RGBA2RGB);
+        cv.cvtColor(hsvRoi, hsvRoi, cv.COLOR_RGB2HSV);
+        let mask = new cv.Mat();
+        let lowScalar = new cv.Scalar(30, 30, 0);
+        let highScalar = new cv.Scalar(180, 180, 180);
+        let low = new cv.Mat(hsvRoi.rows, hsvRoi.cols, hsvRoi.type(), lowScalar);
+        let high = new cv.Mat(hsvRoi.rows, hsvRoi.cols, hsvRoi.type(), highScalar);
+        cv.inRange(hsvRoi, low, high, mask);
+        let roiHist = new cv.Mat();
+        let hsvRoiVec = new cv.MatVector();
+        hsvRoiVec.push_back(hsvRoi);
+        cv.calcHist(hsvRoiVec, [0], mask, roiHist, [180], [0, 180]);
+        cv.normalize(roiHist, roiHist, 0, 255, cv.NORM_MINMAX);
+
+        // delete useless mats.
+        roi.delete(); hsvRoi.delete(); mask.delete(); low.delete(); high.delete(); hsvRoiVec.delete();
+
+        // Setup the termination criteria, either 10 iteration or move by atleast 1 pt
+        let termCrit = new cv.TermCriteria(cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT, 10, 1);
+
+        let hsv = new cv.Mat(videoheight, videowidth, cv.CV_8UC3);
+        let hsvVec = new cv.MatVector();
+        hsvVec.push_back(hsv);
+        let dst = new cv.Mat();
+        let trackBox = null;
+
+        let begin = Date.now();
+
+        // start processing.
+        cap.read(frame);
+        cv.cvtColor(frame, hsv, cv.COLOR_RGBA2RGB);
+        cv.cvtColor(hsv, hsv, cv.COLOR_RGB2HSV);
+        cv.calcBackProject(hsvVec, [0], roiHist, dst, [0, 180], 1);
+
+        // apply camshift to get the new location
+        [trackBox, trackWindow] = cv.CamShift(dst, trackWindow, termCrit);
+
+        // Draw it on image
+        let pts = cv.rotatedRectPoints(trackBox);
+        cv.line(frame, pts[0], pts[1], [255, 0, 0, 255], 3);
+        cv.line(frame, pts[1], pts[2], [255, 0, 0, 255], 3);
+        cv.line(frame, pts[2], pts[3], [255, 0, 0, 255], 3);
+        cv.line(frame, pts[3], pts[0], [255, 0, 0, 255], 3);
+        cv.imshow('CanvasOutput2', frame);
+
+        //console.log(pts[0] +'  yyf  ' + pts[3]);
+
+        // schedule the next one.
+        let delay = 1000/FPS - (Date.now() - begin);
+        setTimeout(processVideo2, delay);
+
+        let centerX = (parseInt(pts[0].x) + parseInt(pts[2].x))/2;
+
+        let centerY = (parseInt(pts[0].y) + parseInt(pts[2].y))/2;
+
+        // console.log(centerX +'  yyf  ' + centerY);
+
+        return {'cx':centerX ,'cy':centerY}
+
+};
+
+
+function track_back(){
+    processVideo2();
+
+    // schedule the first one.
+    setTimeout(processVideo2, 0);
+}
+
+
+var x_temp;
+var y_temp;
+
+$(function () {
+$('#CanvasOutput').mousemove(function (e) {
+
+    x_temp = (parseInt(e.pageX) - 480) * 0.8 ;
+    y_temp = (parseInt(e.pageY) - 460) * 0.85 ;
+    y_temp = 155 - y_temp ;
+
+    $('#testMouseMoveSpan').text('pageX = ' + parseInt(x_temp) + ', pageY = ' + parseInt(y_temp));
+
+
+
+    //MoveTo(x_temp, 280, y_temp);
+});
+});
+
+function click_point(){
+        MoveTo(parseInt(x_temp), 280, parseInt(y_temp));
+    };
+
+
+
+
+</script>
+
+</body></html>
